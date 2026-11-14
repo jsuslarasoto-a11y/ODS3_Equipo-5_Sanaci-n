@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Programa con PYTHONPATH=src",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/src/app/main.py",
       "cwd": "${workspaceFolder}",
