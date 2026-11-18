@@ -1,112 +1,82 @@
-import math
-import time
 import tkinter as tk
-from tkinter import ttk
-
-
-def open_win_canvas(parent: tk.Tk):
-    win = tk.Toplevel(parent)
-    win.title("Reloj")
-    win.geometry("500x620")
-    win.configure(bg="black")
-
-    canvas = tk.Canvas(
-        win,
-        width=340,
-        height=340,
-        background="black",
-        highlightthickness=0,
-    )
-    canvas.pack(pady=(15, 5))
-
-    center_x = center_y = 170
-    radius = 145
-    canvas.create_oval(
-        center_x - radius,
-        center_y - radius,
-        center_x + radius,
-        center_y + radius,
-        outline="white",
-        width=3,
-    )
-
-    for number in range(1, 13):
-        angle = math.radians(number * 30 - 90)
-        x = center_x + math.cos(angle) * (radius - 25)
-        y = center_y + math.sin(angle) * (radius - 25)
-        canvas.create_text(x, y, text=str(number), fill="white", font=("Segoe UI", 14, "bold"))
-
-    for tick in range(60):
-        angle = math.radians(tick * 6 - 90)
-        outer_radius = radius - 5
-        inner_radius = radius - (18 if tick % 5 == 0 else 10)
-        canvas.create_line(
-            center_x + math.cos(angle) * inner_radius,
-            center_y + math.sin(angle) * inner_radius,
-            center_x + math.cos(angle) * outer_radius,
-            center_y + math.sin(angle) * outer_radius,
-            fill="white",
-            width=2 if tick % 5 == 0 else 1,
+from tkinter import ttk, messagebox
+import requests
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+def fetch_data():
+    """
+    Conecta con la API de Open-Meteo y obtiene temperaturas horarias
+    de León, Gto (últimas 24 horas).
+    Devuelve dos listas: horas y temperaturas.
+    """
+    try:
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            "?latitude=21.12&longitude=-101.68"
+            "&hourly=temperature_2m&past_days=1"
+            "&timezone=auto"
         )
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        data = response.json()
 
-    hour_hand = canvas.create_line(0, 0, 0, 0, fill="white", width=6, capstyle=tk.ROUND)
-    minute_hand = canvas.create_line(0, 0, 0, 0, fill="white", width=4, capstyle=tk.ROUND)
-    second_hand = canvas.create_line(0, 0, 0, 0, fill="red", width=2, capstyle=tk.ROUND)
-    canvas.create_oval(
-        center_x - 5,
-        center_y - 5,
-        center_x + 5,
-        center_y + 5,
-        fill="red",
-        outline="red",
-    )
 
-    etiqueta = tk.Label(
-        win,
-        font=("Helvetica", 32, "bold"),
-        background="black",
-        foreground="white",
-    )
-    etiqueta.pack(pady=5)
-
-    def actualizar_reloj():
-        ahora = time.localtime()
-        etiqueta.config(text=time.strftime("%H:%M:%S", ahora))
-
-        segundos = ahora.tm_sec
-        minutos = ahora.tm_min + segundos / 60
-        horas = (ahora.tm_hour % 12) + minutos / 60
-
-        for hand, angle, hand_length in (
-            (hour_hand, horas * 30 - 90, 75),
-            (minute_hand, minutos * 6 - 90, 105),
-            (second_hand, segundos * 6 - 90, 120),
-        ):
-            radians = math.radians(angle)
-            canvas.coords(
-                hand,
-                center_x,
-                center_y,
-                center_x + math.cos(radians) * hand_length,
-                center_y + math.sin(radians) * hand_length,
-            )
-
-        win.after(1000, actualizar_reloj)
-
-    actualizar_reloj()
-
-    estilo = ttk.Style(win)
-    estilo.configure(
-        "Grande.TButton",
-        font=("Segoe UI", 30, "bold"),
-        padding=(40, 40),  # espacio interno: horizontal, vertical
-    )
-
-    ttk.Button(
-        win,
-        text="X",
-        command=win.destroy,
-        style="Grande.TButton",
-    ).pack(pady=8)
-
-    return win
+        horas = data["hourly"]["time"]
+        temperaturas = data["hourly"]["temperature_2m"]
+        return horas, temperaturas
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudieron obtener los datos:\\n{e}")
+        return [], []
+def create_line_chart(horas, temps):
+    """Gráfica de línea."""
+    fig, ax = plt.subplots(figsize=(12, 3))
+    ax.plot(horas, temps,color="green", linestyle="-", marker="o", markersize=6)
+    ax.set_title("Temperatura en León (línea)")
+    ax.set_xlabel("Hora")
+    ax.set_ylabel("°C")
+    ax.tick_params(axis="x", rotation=60)
+    fig.tight_layout()
+    return fig
+def create_bar_chart(horas, temps):
+    """Gráfica de barras."""
+    fig, ax = plt.subplots(figsize=(12, 9))
+    ax.bar(horas, temps,color="orange")
+    ax.set_title("Temperatura en León (barras)")
+    ax.set_xlabel("Hora")
+    ax.set_ylabel("°C")
+    ax.tick_params(axis="x", rotation=75)
+    fig.tight_layout()
+    return fig
+def mostrar_graficas(frm, horas, temps):
+    """Inserta las tres gráficas en el frame de la ventana tkinter."""
+    # Línea
+    fig1 = create_line_chart(horas, temps)
+    canvas1 = FigureCanvasTkAgg(fig1, master=frm)
+    canvas1.draw()
+    canvas1.get_tk_widget().pack(pady=5, fill="x")
+    # Barras
+    fig2 = create_bar_chart(horas, temps)
+    canvas2 = FigureCanvasTkAgg(fig2, master=frm)
+    canvas2.draw()
+    canvas2.get_tk_widget().pack(pady=5, fill="x")
+def open_win_canvas(parent: tk.Tk):
+    """
+    Crea la ventana secundaria con gráficas de la API.
+    """
+    win = tk.Toplevel(parent)
+    win.title("Canvas con API (Open-Meteo) y gráficas")
+    win.geometry("960x1000")
+    frm = ttk.Frame(win, padding=12)
+    frm.pack(fill="both", expand=True)
+    # Botón para cargar datos y graficar
+    def cargar():
+        horas, temps = fetch_data()
+        if horas and temps:
+            mostrar_graficas(frm, horas, temps)
+    ttk.Button(frm, text="Cargar y mostrar gráficas", command=cargar).pack(pady=10)
+# Para pruebas independientes (opcional)
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.title("Prueba win_canvas")
+    ttk.Button(root, text="Abrir ventana Canvas", command=lambda: open_win_canvas(root)).pack(pady=20)
+    root.mainloop()
